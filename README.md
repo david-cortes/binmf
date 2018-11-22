@@ -52,8 +52,6 @@ fit_spfact(sp_mat, row_fact, col_fact, reg_param=1e-1, niter=100, nthreads=1) #a
 np.dot(row_fact[10], col_fact[15]) # If greater than zero, prediction is value 1, otherwise prediction is value 0
 ```
 
-Other function options:
-
 
 # References
 * Pan, Rong, et al. "One-class collaborative filtering." Data Mining, 2008. ICDM'08. Eighth IEEE International Conference on. IEEE, 2008.
