@@ -53,6 +53,11 @@ double dnrm2_(int *N, double *X, int *INCX);
 #define rand_r(a) rand()
 #endif
 
+/* Visual Studio as of 2018 still doesn't support parallel loops with unsigned iterators */
+#if defined(_MSC_VER) || defined(MSC_VER)
+#define size_t long
+#endif
+
 /* Helper functions */
 int randint(int nmax, unsigned int *seed)
 {
