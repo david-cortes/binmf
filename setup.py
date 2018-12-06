@@ -99,5 +99,5 @@ setup(
     name  = "binmf",
     packages = ["binmf"],
     cmdclass = {'build_ext': build_ext_subclass},
-    ext_modules = [Extension("binmf", sources=["binmf/run_sgd.pyx"], include_dirs=[numpy.get_include()], extra_link_args=[], extra_compile_args=['-std=c99'])]
+    ext_modules = [Extension("binmf", sources=["binmf/run_psgd.pyx"], include_dirs=[numpy.get_include()], extra_link_args=[], extra_compile_args=['-std=c99'])]
     )

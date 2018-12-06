@@ -118,7 +118,6 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t nthis;
 	size_t st_this;
 	int tid;
-	double *weight;
 
 	size_t dim_bufferB = dimB * (k + 1) * nthreads;
 	size_t st_buffer_B;
@@ -158,7 +157,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		*/
 
 		/* Calculating sub-gradients for non-zero entries */
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed, weight) shared(Anew, Acnt, buffer_B)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed) shared(Anew, Acnt, buffer_B)
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
 			nthis = X_indptr[ia + 1] - st_this;
