@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <omp.h>
+#include <limits.h>
 
 /* BLAS functions
 https://stackoverflow.com/questions/52905458/link-cython-wrapped-c-functions-against-blas-from-numpy/52913120#52913120
@@ -157,7 +158,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		*/
 
 		/* Calculating sub-gradients for non-zero entries */
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, has_weights, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed, weight) shared(Anew, Acnt, buffer_B)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed, weight) shared(Anew, Acnt, buffer_B)
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
 			nthis = X_indptr[ia + 1] - st_this;
