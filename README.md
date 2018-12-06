@@ -16,8 +16,6 @@ cd binmf
 python setup.py install
 ```
 
-*Note: at the moment, it's not possible to install in Windows if using Visual Studio as C compiler. It will nevertheless work in other OSes and should work fine with mingw64 + gcc in Windows too.*
-
 # Usage
 
 Package does not have a fully-fledged API, only a function that modifies already-initialized parameter matrices in-place.
