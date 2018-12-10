@@ -31,7 +31,7 @@ from scipy.sparse import csr_matrix
 
 ## Generating random sparse data
 nrows = 100
-ncols = 50
+ncols = 500 ## will be a lot slower when rows are not too sparse
 sparsity = 0.1
 np.random.seed(1)
 dense_mat = (np.random.random(size=(nrows, ncols)) >= sparsity).astype('uint8')

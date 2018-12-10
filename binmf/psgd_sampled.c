@@ -49,18 +49,33 @@ double dnrm2_(int *N, double *X, int *INCX);
 #endif
 #endif
 
+/* In-lining for compiler optimizations */
+#ifndef inline
+#ifdef __inline
+#define inline __inline
+#else
+#define inline 
+#endif
+#endif
+
 /* RAND() is thread-safe on Windows, but not on *nix */
-#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
+#ifdef _MSC_VER
 #define rand_r(a) rand()
 #endif
 
-/* Visual Studio as of 2018 still doesn't support parallel loops with unsigned iterators */
-#if defined(_MSC_VER) || defined(MSC_VER)
+/* Visual Studio as of 2018 is stuck with OpenMP 2.0 (released 2002),
+   which doesn't support parallel loops with unsigned iterators.
+   As the code is wrapped in Cython and Cython does not support typdefs conditional on compiler,
+   this will map size_t to long on Windows regardless of compiler.
+   Can be safely removed if not compiling with MSVC. */
+#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
 #define size_t long
+#else
+#include <stddef.h>
 #endif
 
 /* Helper functions */
-int randint(int nmax, unsigned int *seed)
+inline int randint(int nmax, unsigned int *seed)
 {
 	int n = rand_r(seed);
 	int lim = INT_MAX - nmax + 1;
@@ -73,12 +88,25 @@ int comp_size_t(const void *a, const void *b)
 	return ( *(size_t*)a - *(size_t*)b );
 }
 
-int isin(size_t k, size_t *arr, size_t n)
+inline int isin(size_t k, size_t *arr, size_t n)
 {
 	if (k < arr[0]){return 0;}
 	if (k > arr[n-1]){return 0;}
 	size_t* res = (size_t*) bsearch(&k, arr, n, sizeof(size_t), comp_size_t);
 	return res != NULL;
+}
+
+/* Function that applies subgradient updates */
+inline void apply_subgradient(double *step_sz, double *buffer_B, double *Anew, double *A, double *B, size_t ia, size_t ib,
+	size_t st_buffer_B, size_t k, int k_int, int one, size_t *Acnt, size_t st_buffer_B_cnt, double class)
+{
+	double res = ddot(&k_int, A + ia*k, &one, B + ib*k, &one);
+	if ( ((class == 1) & (res < 1)) || ((class == -1) & (res > -1)) ){
+		daxpy(&k_int, step_sz, B + ib*k, &one, Anew + ia*k, &one);
+		daxpy(&k_int, step_sz, A + ia*k, &one, buffer_B + st_buffer_B + ib*k, &one);
+		Acnt[ia]++;
+		buffer_B[st_buffer_B_cnt + ib]++;
+	}
 }
 
 /* Main function
@@ -117,6 +145,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 	size_t nthis;
 	size_t st_this;
+	size_t i;
 	int tid;
 
 	size_t dim_bufferB = dimB * (k + 1) * nthreads;
@@ -124,8 +153,13 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t st_cnt_buffer = dimB * k * nthreads;
 	size_t st_buffer_B_cnt;
 
-	/* Setting different random seeds for each thread */
+	/* Setting different random seeds for each thread
+	   Note: MSVC does not support C99 standard, hence this code*/
+	#ifdef _MSC_VER
+	unisgned int *seeds = (unsigned int *) malloc(sizeof(int) * nthreads);
+	#else
 	unsigned int seeds[nthreads];
+	#endif
 	for (int tid = 0; tid < nthreads; tid++){
 		seeds[tid] = tid + 1;
 	}
@@ -156,7 +190,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		and will segfault when B is large, hence the temporary variable buffer_B which is defined as shared, without a reduction.
 		*/
 
-		/* Calculating sub-gradients for non-zero entries */
+		/* Calculating sub-gradients - iteration is through the rows of A */
 		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed) shared(Anew, Acnt, buffer_B)
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
@@ -164,30 +198,44 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 			tid = omp_get_thread_num();
 			st_buffer_B = (dimB * k) * tid;
 			st_buffer_B_cnt = st_cnt_buffer + dimB * tid;
-			for (size_t i = 0; i < nthis; i++){
-				size_t ib = X_ind[st_this + i];
-				if (ddot(&k_int, A + ia*k, &one, B + ib*k, &one) < 1){
-					daxpy(&k_int, Xr + st_this + i, B + ib*k, &one, Anew + ia*k, &one);
-					daxpy(&k_int, Xr + st_this + i, A + ia*k, &one, buffer_B + st_buffer_B + ib*k, &one);
-					Acnt[ia]++;
-					buffer_B[st_buffer_B_cnt + ib]++;
-				}
-			}
 
-			/* Sub-gradients for sampled zero entries */
-			tr_seed = seeds + omp_get_thread_num();
-			for (size_t i = 0; i < nthis; i++){
-				ib = (size_t) randint(dimB, tr_seed);
-				while (isin(ib, X_ind + st_this, nthis)){
-					ib = (size_t) randint(dimB, tr_seed);
+			/* Regular case: this row has few entries, can subsample entries at random */
+			if (nthis < dimB*0.1){
+
+				/* Sub-gradient for non-zero entries (positive class) */
+				for (size_t i = 0; i < nthis; i++){
+					size_t ib = X_ind[st_this + i];
+					apply_subgradient(Xr + st_this + i, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, 1);
 				}
-				if (ddot(&k_int, A + ia*k, &one, B + ib*k, &one) > -1){
-					daxpy(&k_int, &minus_one, B + ib*k, &one, Anew + ia*k, &one);
-					daxpy(&k_int, &minus_one, A + ia*k, &one, buffer_B + st_buffer_B + ib*k, &one);
-					Acnt[ia]++;
-					buffer_B[st_buffer_B_cnt + ib]++;
+
+				/* Sub-gradients for sampled zero entries (negative class) */
+				tr_seed = seeds + omp_get_thread_num();
+				for (size_t i = 0; i < nthis; i++){
+					ib = (size_t) randint(dimB, tr_seed);
+					while (isin(ib, X_ind + st_this, nthis)){
+						ib = (size_t) randint(dimB, tr_seed);
+					}
+					apply_subgradient(&minus_one, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, -1);
+				}
+			} else {
+				/* If this row has too many entries, it will be too slow to subsample entries
+				   at random, as there's a look-up for each of them and the probability that they will
+				   be present and a new one has to be sampled again will be quite high.
+
+				   In this case, better iterate through all the entries at once */
+				for (size_t ib = 0; ib < dimB; ib++){
+					i = 0;
+					/* Entry is non-zero */
+					if (isin(ib, X_ind + st_this, nthis)){
+						apply_subgradient(Xr + st_this + i, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, 1);
+						i++;
+					/* Entry is zero */
+					} else {
+						apply_subgradient(&minus_one, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, -1);
+					}
 				}
 			}
+			
 		}
 
 		/* Reconstructing Bnew and Bcnt, same as they are for A */
@@ -235,5 +283,8 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		}
 	}
 
+	#ifdef _MSC_VER
+	free(seeds);
+	#endif
 
 }
