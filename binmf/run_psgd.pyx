@@ -5,10 +5,10 @@ from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 
 IF UNAME_SYSNAME == "Windows":
-	type_indexer = ctypes.c_long
+	obj_ind_type = ctypes.c_long
 	ctypedef long ind_type
 ELSE:
-	type_indexer = ctypes.c_size_t
+	obj_ind_type = ctypes.c_size_t
 	ctypedef size_t ind_type
 
 cdef extern from "psgd_sampled.c":
@@ -37,8 +37,8 @@ def fit_spfact(Xcsr, np.ndarray[double, ndim=2] A, np.ndarray[double, ndim=2] B,
 	cdef np.ndarray[double, ndim=2] Anew = np.empty((dimA, k), dtype='float64')
 	cdef np.ndarray[double, ndim=2] Bnew = np.empty((dimB, k), dtype='float64')
 
-	cdef np.ndarray[ind_type, ndim=1] Acnt = np.empty(dimA, dtype=type_indexer)
-	cdef np.ndarray[ind_type, ndim=1] Bcnt = np.empty(dimB, dtype=type_indexer)
+	cdef np.ndarray[ind_type, ndim=1] Acnt = np.empty(dimA, dtype=obj_ind_type)
+	cdef np.ndarray[ind_type, ndim=1] Bcnt = np.empty(dimB, dtype=obj_ind_type)
 
 	cdef np.ndarray[double, ndim=1] buffer_B = np.empty(dimB * (k + 1) * nthreads, dtype='float64')
 

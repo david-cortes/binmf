@@ -59,7 +59,7 @@ double dnrm2_(int *N, double *X, int *INCX);
 #endif
 
 /* RAND() is thread-safe on Windows, but not on *nix */
-#ifdef _MSC_VER
+#ifndef _MSC_VER
 #define rand_r(a) rand()
 #endif
 
