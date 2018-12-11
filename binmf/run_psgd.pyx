@@ -27,8 +27,8 @@ def fit_spfact(Xcsr, np.ndarray[double, ndim=2] A, np.ndarray[double, ndim=2] B,
 
 	if Xcsr.data.dtype != np.float64:
 		Xcsr.data = Xcsr.data.astype('float64')
-	Xcsr.indptr = Xcsr.indptr.astype(ctypes.c_size_t)
-	Xcsr.indices = Xcsr.indices.astype(ctypes.c_size_t)
+	Xcsr.indptr = Xcsr.indptr.astype(obj_ind_type)
+	Xcsr.indices = Xcsr.indices.astype(obj_ind_type)
 
 	cdef np.ndarray[double, ndim=1] X_data = Xcsr.data
 	cdef np.ndarray[ind_type, ndim=1] X_indptr = Xcsr.indptr

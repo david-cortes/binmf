@@ -51,7 +51,7 @@ class build_ext_subclass( build_ext ):
         if compiler == 'msvc': # visual studio
             for e in self.extensions:
                 e.extra_link_args += [os.path.join(blas_path, blas_file)]
-                e.extra_compile_args += ['/O2', '/openmp']
+                e.extra_compile_args += ['/O2']
         else: # gcc
             for e in self.extensions:
                 e.extra_link_args += ["-L"+blas_path, "-l:"+blas_file]

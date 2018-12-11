@@ -59,7 +59,7 @@ double dnrm2_(int *N, double *X, int *INCX);
 #endif
 
 /* RAND() is thread-safe on Windows, but not on *nix */
-#ifndef _MSC_VER
+#ifdef _MSC_VER
 #define rand_r(a) rand()
 #endif
 
@@ -156,7 +156,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	/* Setting different random seeds for each thread
 	   Note: MSVC does not support C99 standard, hence this code*/
 	#ifdef _MSC_VER
-	unisgned int *seeds = (unsigned int *) malloc(sizeof(int) * nthreads);
+	unsigned int *seeds = (unsigned int *) malloc(sizeof(int) * nthreads);
 	#else
 	unsigned int seeds[nthreads];
 	#endif

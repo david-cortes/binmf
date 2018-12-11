@@ -15,6 +15,7 @@ git clone https://github.com/david-cortes/binmf.git
 cd binmf
 python setup.py install
 ```
+**Note: parallelization (multithreading) is not available when compiling with Visual Studio. Compile with GCC for better performance.**
 
 # Usage
 
