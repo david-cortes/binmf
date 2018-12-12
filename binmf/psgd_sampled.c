@@ -296,8 +296,10 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		}
 	}
 
+	#ifdef _OPENMP
 	#ifdef _MSC_VER
 	free(seeds);
+	#endif
 	#endif
 
 }
