@@ -52,10 +52,16 @@ class build_ext_subclass( build_ext ):
             for e in self.extensions:
                 e.extra_link_args += [os.path.join(blas_path, blas_file)]
                 e.extra_compile_args += ['/O2']
+        elif compiler == 'ming32': # mingw32 doesn't support OpenMP in a default conda install
+            # you can enable it by putting in 'extra_compile_args'
+            # the following entry '-fopenmp=libomp5 <path_to_libomp.so or .a>'
+            for e in self.extensions:
+                e.extra_link_args += ["-L"+blas_path, "-l:"+blas_file]
+                e.extra_compile_args += ['-O2', '-march=native', '-std=c99']
         else: # gcc
             for e in self.extensions:
                 e.extra_link_args += ["-L"+blas_path, "-l:"+blas_file]
-                e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99']
+                e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99']
                 e.extra_link_args += ['-fopenmp']
         build_ext.build_extensions(self)
 

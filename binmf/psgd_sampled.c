@@ -7,8 +7,10 @@
 
 #include <math.h>
 #include <stdlib.h>
-#include <omp.h>
 #include <limits.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 /* BLAS functions
 https://stackoverflow.com/questions/52905458/link-cython-wrapped-c-functions-against-blas-from-numpy/52913120#52913120
@@ -153,6 +155,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t st_cnt_buffer = dimB * k * nthreads;
 	size_t st_buffer_B_cnt;
 
+	#ifdef _OPENMP
 	/* Setting different random seeds for each thread
 	   Note: MSVC does not support C99 standard, hence this code*/
 	#ifdef _MSC_VER
@@ -163,6 +166,10 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	for (int tid = 0; tid < nthreads; tid++){
 		seeds[tid] = tid + 1;
 	}
+	#else
+	tid = 0;
+	nthreads = 1;
+	#endif
 	unsigned int* tr_seed;
 
 	/* Iterations of the loop */
@@ -195,7 +202,9 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
 			nthis = X_indptr[ia + 1] - st_this;
+			#ifdef _OPENMP
 			tid = omp_get_thread_num();
+			#endif
 			st_buffer_B = (dimB * k) * tid;
 			st_buffer_B_cnt = st_cnt_buffer + dimB * tid;
 
@@ -209,7 +218,11 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 				}
 
 				/* Sub-gradients for sampled zero entries (negative class) */
+				#ifdef _OPENMP
 				tr_seed = seeds + omp_get_thread_num();
+				#else
+				*tr_seed = 1;
+				#endif
 				for (size_t i = 0; i < nthis; i++){
 					ib = (size_t) randint(dimB, tr_seed);
 					while (isin(ib, X_ind + st_this, nthis)){

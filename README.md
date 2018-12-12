@@ -15,13 +15,13 @@ git clone https://github.com/david-cortes/binmf.git
 cd binmf
 python setup.py install
 ```
-**Note: parallelization (multithreading) is not available when compiling with Visual Studio. Compile with GCC for better performance.**
+**Note: parallelization (multithreading) is disabled by default in Windows with compilers `msvc` and `mingw32`. To enable it, you need to install mingw with OpenMP and add it in `setup.py`**
 
 # Usage
 
 Package does not have a fully-fledged API, only a function that modifies already-initialized parameter matrices in-place.
 
-Takes as input a sparse matrix in CSR or CSC format, and already-initialized factor matrices.
+Takes as input a sparse matrix in CSR format, and already-initialized factor matrices.
 
 Will take the values in the non-zero entries as weights. If a uniform weighting is desired, the input matrix should have all values equal to 1.
 
@@ -49,6 +49,8 @@ fit_spfact(sp_mat, row_fact, col_fact, reg_param=1e-1, niter=100, nthreads=1) #a
 
 ## Prediction for entry (10, 15)
 np.dot(row_fact[10], col_fact[15]) # If greater than zero, prediction is value 1, otherwise prediction is value 0
+
+## Note: more iterations will do better in very large datasets
 ```
 
 
