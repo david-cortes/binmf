@@ -8,37 +8,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <limits.h>
+#include "findblas.h" /* https://github.com/david-cortes/findblas */
 #ifdef _OPENMP
 #include <omp.h>
-#endif
-
-/* BLAS functions
-https://stackoverflow.com/questions/52905458/link-cython-wrapped-c-functions-against-blas-from-numpy/52913120#52913120
- */
-double ddot(int *N, double *DX, int *INCX, double *DY, int *INCY);
-void daxpy(int *N, double *DA, double *DX, int *INCX, double *DY, int *INCY);
-void dscal(int *N, double *DA, double *DX, int *INCX);
-double dnrm2(int *N, double *X, int *INCX);
-
-
-#ifndef ddot
-double ddot_(int *N, double *DX, int *INCX, double *DY, int *INCY);
-#define ddot(N, DX, INCX, DY, INCY) ddot_(N, DX, INCX, DY, INCY)
-#endif
-
-#ifndef daxpy
-void daxpy_(int *N, double *DA, double *DX, int *INCX, double *DY, int *INCY);
-#define daxpy(N, DA, DX, INCX, DY, INCY) daxpy_(N, DA, DX, INCX, DY, INCY)
-#endif
-
-#ifndef dscal
-void dscal_(int *N, double *DA, double *DX, int *INCX);
-#define dscal(N, DA, DX, INCX) dscal_(N, DA, DX, INCX)
-#endif
-
-#ifndef dnrm2
-double dnrm2_(int *N, double *X, int *INCX);
-#define dnrm2(N, X, INCX) dnrm2_(N, X, INCX)
 #endif
 
 
@@ -99,13 +71,13 @@ inline int isin(size_t k, size_t *arr, size_t n)
 }
 
 /* Function that applies subgradient updates */
-inline void apply_subgradient(double *step_sz, double *buffer_B, double *Anew, double *A, double *B, size_t ia, size_t ib,
-	size_t st_buffer_B, size_t k, int k_int, int one, size_t *Acnt, size_t st_buffer_B_cnt, double class)
+inline void apply_subgradient(double step_sz, double *buffer_B, double *Anew, double *A, double *B, size_t ia, size_t ib,
+	size_t st_buffer_B, size_t k, int k_int, size_t *Acnt, size_t st_buffer_B_cnt, double class)
 {
-	double res = ddot(&k_int, A + ia*k, &one, B + ib*k, &one);
+	double res = cblas_ddot(k_int, A + ia*k, 1, B + ib*k, 1);
 	if ( ((class == 1) & (res < 1)) || ((class == -1) & (res > -1)) ){
-		daxpy(&k_int, step_sz, B + ib*k, &one, Anew + ia*k, &one);
-		daxpy(&k_int, step_sz, A + ia*k, &one, buffer_B + st_buffer_B + ib*k, &one);
+		cblas_daxpy(k_int, step_sz, B + ib*k, 1, Anew + ia*k, 1);
+		cblas_daxpy(k_int, step_sz, A + ia*k, 1, buffer_B + st_buffer_B + ib*k, 1);
 		Acnt[ia]++;
 		buffer_B[st_buffer_B_cnt + ib]++;
 	}
@@ -140,10 +112,6 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	double scaling_iter, scaling_mispred, scaling_proj;
 	double scaling_proj0 = 1 / sqrt(reg_param);
 	double cnst;
-
-	int one = 1;
-	double one_dbl = 1;
-	double minus_one = -1;
 
 	size_t nthis;
 	size_t st_this;
@@ -198,7 +166,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		*/
 
 		/* Calculating sub-gradients - iteration is through the rows of A */
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, one, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed) shared(Anew, Acnt, buffer_B)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed) shared(Anew, Acnt, buffer_B)
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
 			nthis = X_indptr[ia + 1] - st_this;
@@ -214,7 +182,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 				/* Sub-gradient for non-zero entries (positive class) */
 				for (size_t i = 0; i < nthis; i++){
 					size_t ib = X_ind[st_this + i];
-					apply_subgradient(Xr + st_this + i, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, 1);
+					apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, 1);
 				}
 
 				/* Sub-gradients for sampled zero entries (negative class) */
@@ -228,7 +196,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 					while (isin(ib, X_ind + st_this, nthis)){
 						ib = (size_t) randint(dimB, tr_seed);
 					}
-					apply_subgradient(&minus_one, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, -1);
+					apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, -1);
 				}
 			} else {
 				/* If this row has too many entries, it will be too slow to subsample entries
@@ -240,11 +208,11 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 					i = 0;
 					/* Entry is non-zero */
 					if (isin(ib, X_ind + st_this, nthis)){
-						apply_subgradient(Xr + st_this + i, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, 1);
+						apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, 1);
 						i++;
 					/* Entry is zero */
 					} else {
-						apply_subgradient(&minus_one, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, one, Acnt, st_buffer_B_cnt, -1);
+						apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, -1);
 					}
 				}
 			}
@@ -253,11 +221,11 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 		/* Reconstructing Bnew and Bcnt, same as they are for A */
 		if (nthreads > 1){
-			#pragma omp parallel for schedule(static) num_threads(nthreads) firstprivate(buffer_B, k, one, one_dbl, st_cnt_buffer, dimB) shared(Bnew, Bcnt) private(st_buffer_B_cnt)
+			#pragma omp parallel for schedule(static) num_threads(nthreads) firstprivate(buffer_B, k, st_cnt_buffer, dimB) shared(Bnew, Bcnt) private(st_buffer_B_cnt)
 			for (size_t ib = 0; ib < dimB; ib++){
 				for (int tr = 0; tr < nthreads; tr++){
 					st_buffer_B_cnt = st_cnt_buffer + dimB * tr;
-					daxpy(&k_int, &one_dbl, buffer_B + tr*(dimB * k) + ib*k, &one, Bnew + ib*k, &one);
+					cblas_daxpy(k_int, 1, buffer_B + tr*(dimB * k) + ib*k, 1, Bnew + ib*k, 1);
 					Bcnt[ib] += buffer_B[st_buffer_B_cnt + ib];
 				}
 			}
@@ -269,29 +237,29 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		}
 
 		/* Applying the updates */
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) shared(A) firstprivate(Anew, projected, scaling_mispred, scaling_proj0, Acnt, k, k_int, one) private(cnst, scaling_proj)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) shared(A) firstprivate(Anew, projected, scaling_mispred, scaling_proj0, Acnt, k, k_int) private(cnst, scaling_proj)
 		for (size_t ia = 0; ia < dimA; ia++){
-			dscal(&k_int, &scaling_iter, A + ia*k, &one);
+			cblas_dscal(k_int, scaling_iter, A + ia*k, 1);
 			if (Acnt[ia] > 0){
 				cnst = scaling_mispred / (double) Acnt[ia];
-				daxpy(&k_int, &cnst, Anew + ia*k, &one, A + ia*k, &one);
+				cblas_daxpy(k_int, cnst, Anew + ia*k, 1, A + ia*k, 1);
 			}
 			if (projected){
-				scaling_proj = scaling_proj0 / dnrm2(&k_int, A + ia*k, &one);
-				if (scaling_proj < 1){dscal(&k_int, &scaling_proj, A + ia*k, &one);}
+				scaling_proj = scaling_proj0 / cblas_dnrm2(k_int, A + ia*k, 1);
+				if (scaling_proj < 1){cblas_dscal(k_int, scaling_proj, A + ia*k, 1);}
 			}
 		}
 
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) shared(B) firstprivate(Bnew, projected, scaling_mispred, scaling_proj0, Bcnt, k, k_int, one) private(cnst, scaling_proj)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) shared(B) firstprivate(Bnew, projected, scaling_mispred, scaling_proj0, Bcnt, k, k_int) private(cnst, scaling_proj)
 		for (size_t ib = 0; ib < dimB; ib++){
-			dscal(&k_int, &scaling_iter, B + ib*k, &one);
+			cblas_dscal(k_int, scaling_iter, B + ib*k, 1);
 			if (Bcnt[ib] > 0){
 				cnst = scaling_mispred / (double) Bcnt[ib];
-				daxpy(&k_int, &cnst, Bnew + ib*k, &one, B + ib*k, &one);
+				cblas_daxpy(k_int, cnst, Bnew + ib*k, 1, B + ib*k, 1);
 			}
 			if (projected){
-				scaling_proj = scaling_proj0 / dnrm2(&k_int, B + ib*k, &one);
-				if (scaling_proj < 1){dscal(&k_int, &scaling_proj, B + ib*k, &one);}
+				scaling_proj = scaling_proj0 / cblas_dnrm2(k_int, B + ib*k, 1);
+				if (scaling_proj < 1){cblas_dscal(k_int, scaling_proj, B + ib*k, 1);}
 			}
 		}
 	}

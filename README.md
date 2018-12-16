@@ -15,6 +15,8 @@ git clone https://github.com/david-cortes/binmf.git
 cd binmf
 python setup.py install
 ```
+(It requires package `findblas`, can be installed with `pip install findblas`.)
+
 **Note: parallelization (multithreading) is disabled by default in Windows with compilers `msvc` and `mingw32`. To enable it, you need to install mingw with OpenMP and add it in `setup.py`**
 
 # Usage
