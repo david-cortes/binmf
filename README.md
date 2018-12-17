@@ -17,8 +17,6 @@ python setup.py install
 ```
 (It requires package `findblas`, can be installed with `pip install findblas`.)
 
-**Note: parallelization (multithreading) is disabled by default in Windows with compilers `msvc` and `mingw32`. To enable it, you need to install mingw with OpenMP and add it in `setup.py`**
-
 # Usage
 
 Package does not have a fully-fledged API, only a function that modifies already-initialized parameter matrices in-place.

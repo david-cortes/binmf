@@ -10,31 +10,31 @@
 #include <limits.h>
 #include "findblas.h" /* https://github.com/david-cortes/findblas */
 #ifdef _OPENMP
-#include <omp.h>
+	#include <omp.h>
 #endif
 
 
 /* Aliasing for compiler optimizations */
 #ifndef restrict
-#ifdef __restrict
-#define restrict __restrict
-#else
-#define restrict
-#endif
+	#ifdef __restrict
+		#define restrict __restrict
+	#else
+		#define restrict
+	#endif
 #endif
 
 /* In-lining for compiler optimizations */
 #ifndef inline
-#ifdef __inline
-#define inline __inline
-#else
-#define inline 
-#endif
+	#ifdef __inline
+		#define inline __inline
+	#else
+		#define inline 
+	#endif
 #endif
 
 /* RAND() is thread-safe on Windows, but not on *nix */
 #ifdef _MSC_VER
-#define rand_r(a) rand()
+	#define rand_r(a) rand()
 #endif
 
 /* Visual Studio as of 2018 is stuck with OpenMP 2.0 (released 2002),
@@ -43,9 +43,9 @@
    this will map size_t to long on Windows regardless of compiler.
    Can be safely removed if not compiling with MSVC. */
 #if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
-#define size_t long
+	#define size_t long
 #else
-#include <stddef.h>
+	#include <stddef.h>
 #endif
 
 /* Helper functions */
@@ -72,14 +72,14 @@ inline int isin(size_t k, size_t *arr, size_t n)
 
 /* Function that applies subgradient updates */
 inline void apply_subgradient(double step_sz, double *buffer_B, double *Anew, double *A, double *B, size_t ia, size_t ib,
-	size_t st_buffer_B, size_t k, int k_int, size_t *Acnt, size_t st_buffer_B_cnt, double class)
+	size_t st_buffer_B, size_t k, int k_int, size_t *Acnt, size_t *buffer_B_cnt, size_t st_buffer_B_cnt, double class)
 {
 	double res = cblas_ddot(k_int, A + ia*k, 1, B + ib*k, 1);
 	if ( ((class == 1) & (res < 1)) || ((class == -1) & (res > -1)) ){
 		cblas_daxpy(k_int, step_sz, B + ib*k, 1, Anew + ia*k, 1);
 		cblas_daxpy(k_int, step_sz, A + ia*k, 1, buffer_B + st_buffer_B + ib*k, 1);
 		Acnt[ia]++;
-		buffer_B[st_buffer_B_cnt + ib]++;
+		buffer_B_cnt[st_buffer_B_cnt + ib]++;
 	}
 }
 
@@ -95,16 +95,10 @@ inline void apply_subgradient(double step_sz, double *buffer_B, double *Anew, do
 	niter                   :  Number of sub-gradient iterations
 	projected               :  Whether to apply a projection step at each update (recommended)
 	nthreads                :  Number of parallel threads to use
-	buffer_B                :  Working memory of dimension <dimB * (k + 1) * nthreads>
-	Anew                    :  Working memory of dimension <dimA * k>
-	Bnew                    :  Working memory of dimension <dimB * k>
-	Acnt                    :  Working memory of dimension <dimA>
-	Bcnt                    :  Working memory of dimension <dimB>
 */
 void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size_t k, size_t nnz,
 	size_t *restrict X_indptr, size_t *restrict X_ind, double *restrict Xr,
-	double reg_param, size_t niter, int projected, int nthreads,
-	double *restrict buffer_B, double *restrict Anew, double *restrict Bnew, size_t *restrict Acnt, size_t *restrict Bcnt)
+	double reg_param, size_t niter, int projected, int nthreads)
 {
 
 	size_t ib;
@@ -118,27 +112,47 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t i;
 	int tid;
 
-	size_t dim_bufferB = dimB * (k + 1) * nthreads;
-	size_t st_buffer_B;
-	size_t st_cnt_buffer = dimB * k * nthreads;
-	size_t st_buffer_B_cnt;
-
 	#ifdef _OPENMP
 	/* Setting different random seeds for each thread
 	   Note: MSVC does not support C99 standard, hence this code*/
-	#ifdef _MSC_VER
-	unsigned int *seeds = (unsigned int *) malloc(sizeof(int) * nthreads);
+		#ifdef _MSC_VER
+			unsigned int *seeds = (unsigned int*) malloc(sizeof(int) * nthreads);
+		#else
+			unsigned int seeds[nthreads];
+		#endif
+		for (int tid = 0; tid < nthreads; tid++){seeds[tid] = tid + 1;}
 	#else
-	unsigned int seeds[nthreads];
-	#endif
-	for (int tid = 0; tid < nthreads; tid++){
-		seeds[tid] = tid + 1;
-	}
-	#else
-	tid = 0;
-	nthreads = 1;
+		tid = 0;
+		nthreads = 1;
 	#endif
 	unsigned int* tr_seed;
+
+	double *Anew = (double*) malloc(sizeof(double) * dimA * k);
+	double *Bnew = (double*) malloc(sizeof(double) * dimB * k);
+	size_t *Acnt = (size_t*) malloc(sizeof(size_t) * dimA);
+	size_t *Bcnt = (size_t*) malloc(sizeof(size_t) * dimB);
+
+	
+	/*	The idea for these is to create a copy of Bnew and Bcnt for each thread,
+		but as OpenMP allocates private arrays in the stack and these can get very big,
+		using them as 'private' or 'firstprivate' will instead segfault.
+		The code here allocates continuous arrays that are a multiple 'nthreads' of the
+		number of elements in Bnew and Bcnt, then each thread writes to its own chunk of these
+		arrays to avoid simultaneous edits, and later these are combined into Bnew and Bcnt */
+	double *buffer_B;
+	size_t *buffer_B_cnt;
+	if (nthreads > 1){
+		buffer_B = (double*) malloc(sizeof(double) * dimB * k * nthreads);
+		buffer_B_cnt = (size_t*) malloc(sizeof(size_t) * dimB * nthreads);
+	} else {
+		buffer_B = Bnew;
+		buffer_B_cnt = Bcnt;
+	}
+
+	size_t dim_bufferB = dimB * k * nthreads;
+	size_t dim_bufferB_cnt = dimB * nthreads;
+	size_t st_buffer_B;
+	size_t st_buffer_B_cnt;
 
 	/* Iterations of the loop */
 	for (size_t t = 1; t < (niter+1) ; t++){
@@ -154,6 +168,8 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		for (size_t n = 0; n < (dimB); n++){Bcnt[n] = 0;}
 		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(buffer_B) firstprivate(dim_bufferB)
 		for (size_t n = 0; n < dim_bufferB; n++){buffer_B[n] = 0;}
+		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(buffer_B_cnt) firstprivate(dim_bufferB_cnt)
+		for (size_t n = 0; n < dim_bufferB_cnt; n++){buffer_B_cnt[n] = 0;}
 
 		/* Scaling parameters for this iteration */
 		scaling_iter = 1 - 1 / (double) t;
@@ -166,7 +182,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		*/
 
 		/* Calculating sub-gradients - iteration is through the rows of A */
-		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, st_cnt_buffer, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed) shared(Anew, Acnt, buffer_B)
+		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed, i) shared(Anew, Acnt, buffer_B, buffer_B_cnt)
 		for (size_t ia = 0; ia < dimA; ia++){
 			st_this = X_indptr[ia];
 			nthis = X_indptr[ia + 1] - st_this;
@@ -174,15 +190,15 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 			tid = omp_get_thread_num();
 			#endif
 			st_buffer_B = (dimB * k) * tid;
-			st_buffer_B_cnt = st_cnt_buffer + dimB * tid;
+			st_buffer_B_cnt = dimB * tid;
 
-			/* Regular case: this row has few entries, can subsample entries at random */
+			/* Regular case: this row has few entries, can subsample entries at random fast */
 			if (nthis < dimB*0.1){
 
 				/* Sub-gradient for non-zero entries (positive class) */
 				for (size_t i = 0; i < nthis; i++){
 					size_t ib = X_ind[st_this + i];
-					apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, 1);
+					apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, 1);
 				}
 
 				/* Sub-gradients for sampled zero entries (negative class) */
@@ -196,7 +212,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 					while (isin(ib, X_ind + st_this, nthis)){
 						ib = (size_t) randint(dimB, tr_seed);
 					}
-					apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, -1);
+					apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, -1);
 				}
 			} else {
 				/* If this row has too many entries, it will be too slow to subsample entries
@@ -208,11 +224,11 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 					i = 0;
 					/* Entry is non-zero */
 					if (isin(ib, X_ind + st_this, nthis)){
-						apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, 1);
+						apply_subgradient(Xr[st_this + i], buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, 1);
 						i++;
 					/* Entry is zero */
 					} else {
-						apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, st_buffer_B_cnt, -1);
+						apply_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, -1);
 					}
 				}
 			}
@@ -221,18 +237,12 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 		/* Reconstructing Bnew and Bcnt, same as they are for A */
 		if (nthreads > 1){
-			#pragma omp parallel for schedule(static) num_threads(nthreads) firstprivate(buffer_B, k, st_cnt_buffer, dimB) shared(Bnew, Bcnt) private(st_buffer_B_cnt)
+			#pragma omp parallel for schedule(static) num_threads(nthreads) firstprivate(buffer_B, buffer_B_cnt, k, dimB) shared(Bnew, Bcnt)
 			for (size_t ib = 0; ib < dimB; ib++){
 				for (int tr = 0; tr < nthreads; tr++){
-					st_buffer_B_cnt = st_cnt_buffer + dimB * tr;
 					cblas_daxpy(k_int, 1, buffer_B + tr*(dimB * k) + ib*k, 1, Bnew + ib*k, 1);
-					Bcnt[ib] += buffer_B[st_buffer_B_cnt + ib];
+					Bcnt[ib] += buffer_B_cnt[dimB*tr + ib];
 				}
-			}
-		} else {
-			Bnew = buffer_B;
-			for (size_t ib = 0; ib < dimB; ib++){
-				Bcnt[ib] = buffer_B[st_cnt_buffer + ib];
 			}
 		}
 
@@ -264,10 +274,19 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		}
 	}
 
+	if (nthreads > 1){
+		free(buffer_B);
+		free(buffer_B_cnt);
+	}
+	free(Anew);
+	free(Bnew);
+	free(Acnt);
+	free(Bcnt);
+
 	#ifdef _OPENMP
-	#ifdef _MSC_VER
-	free(seeds);
-	#endif
+		#ifdef _MSC_VER
+			free(seeds);
+		#endif
 	#endif
 
 }

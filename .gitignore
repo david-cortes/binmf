@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# dist files
+dist/
+*.zip
+*.tar.gz
+
+binmf/
+	run_psgd.c
+
+dist/
+	*.*
+
+build/
+	*.*
+
+*.so
+
+MANIFEST
