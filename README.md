@@ -53,6 +53,27 @@ np.dot(row_fact[10], col_fact[15]) # If greater than zero, prediction is value 1
 ## Note: more iterations will do better in very large datasets
 ```
 
+Can also be called directly from C and wrapped in other languages:
+
+```c
+/* Main function
+	A                       :  Already-initialized A matrix (model parameters)
+	B                       :  Already-initialized B matrix (model parameters)
+	dimA                    :  Number of rows in matrix A
+	dimB                    :  Number of rows in matrix B
+	k                       :  Dimensionality of low-rank approximation (number of columns in A and B)
+	nnz                     :  Number of non-zero entries in the X matrix
+	X_indptr, X_ind,  Xr    :  X matrix (dim A x B) in row-sparse format - values indicate weights, Xr is ignored when there's no weights
+	reg_param               :  Strength of l2 regularization
+	niter                   :  Number of sub-gradient iterations
+	projected               :  Whether to apply a projection step at each update (recommended)
+	nthreads                :  Number of parallel threads to use
+*/
+void psgd(double *A, double *B, size_t dimA, size_t dimB, size_t k, size_t nnz,
+	size_t *X_indptr, size_t *X_ind, double *Xr,
+	double reg_param, size_t niter, int projected, int nthreads)
+```
+
 
 # References
 * Pan, Rong, et al. "One-class collaborative filtering." Data Mining, 2008. ICDM'08. Eighth IEEE International Conference on. IEEE, 2008.

@@ -181,7 +181,7 @@ inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double 
 	dimB                    :  Number of rows in matrix B
 	k                       :  Dimensionality of low-rank approximation (number of columns in A and B)
 	nnz                     :  Number of non-zero entries in the X matrix
-	X_indptr, X_ind,  Xr  :  X matrix (dim A x B) in row-sparse format - values indicate weights, Xr is ignored when there's no weights
+	X_indptr, X_ind,  Xr    :  X matrix (dim A x B) in row-sparse format - values indicate weights, Xr is ignored when there's no weights
 	reg_param               :  Strength of l2 regularization
 	niter                   :  Number of sub-gradient iterations
 	projected               :  Whether to apply a projection step at each update (recommended)
@@ -206,7 +206,6 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	#ifdef _OPENMP
 	/* Setting different random seeds for each thread
 	   Note: MSVC does not support C99 standard, hence this code*/
-		// unsigned int *seeds = (unsigned int*) malloc(sizeof(int) * nthreads);
 		#ifdef _MSC_VER
 			unsigned int *seeds = (unsigned int*) malloc(sizeof(int) * nthreads);
 		#else
