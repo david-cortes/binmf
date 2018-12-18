@@ -33,7 +33,7 @@
 #endif
 
 /* RAND() is thread-safe on Windows, but not on *nix */
-#ifdef _MSC_VER
+#ifndef rand_r
 	#define rand_r(a) rand()
 #endif
 
