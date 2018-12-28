@@ -128,17 +128,17 @@ inline void set_arrays_to_zero(double *restrict Anew, double *restrict Bnew,
 		#endif
 
 		/* Some arrays can get very large, and are faster to set in parallel */
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(Anew) firstprivate(dimA, k)
+		#pragma omp parallel for schedule(static, dimA*k/nthreads) num_threads(nthreads) shared(Anew) firstprivate(dimA, k)
 		for (size_t_for n = 0; n < (dimA*k); n++){Anew[n] = 0;}
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(Bnew) firstprivate(dimB, k)
+		#pragma omp parallel for schedule(static, dimB*k/nthreads) num_threads(nthreads) shared(Bnew) firstprivate(dimB, k)
 		for (size_t_for n = 0; n < (dimB*k); n++){Bnew[n] = 0;}
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(Acnt) firstprivate(dimA)
+		#pragma omp parallel for schedule(static, dimA/nthreads) num_threads(nthreads) shared(Acnt) firstprivate(dimA)
 		for (size_t_for n = 0; n < (dimA); n++){Acnt[n] = 0;}
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(Bcnt) firstprivate(dimB)
+		#pragma omp parallel for schedule(static, dimB/nthreads) num_threads(nthreads) shared(Bcnt) firstprivate(dimB)
 		for (size_t_for n = 0; n < (dimB); n++){Bcnt[n] = 0;}
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(buffer_B) firstprivate(dim_bufferB)
+		#pragma omp parallel for schedule(static, dim_bufferB/nthreads) num_threads(nthreads) shared(buffer_B) firstprivate(dim_bufferB)
 		for (size_t_for n = 0; n < dim_bufferB; n++){buffer_B[n] = 0;}
-		#pragma omp parallel for schedule(static) num_threads(nthreads) shared(buffer_B_cnt) firstprivate(dim_bufferB_cnt)
+		#pragma omp parallel for schedule(static, dim_bufferB_cnt/nthreads) num_threads(nthreads) shared(buffer_B_cnt) firstprivate(dim_bufferB_cnt)
 		for (size_t_for n = 0; n < dim_bufferB_cnt; n++){buffer_B_cnt[n] = 0;}
 
 	#else
@@ -164,7 +164,7 @@ inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double 
 		#endif
 	#endif
 
-	#pragma omp parallel for schedule(static) num_threads(nthreads) firstprivate(buffer_B, buffer_B_cnt, k, dimB) shared(Bnew, Bcnt)
+	#pragma omp parallel for schedule(static, dimB/nthreads) num_threads(nthreads) firstprivate(buffer_B, buffer_B_cnt, k, dimB) shared(Bnew, Bcnt)
 	for (size_t_for ib = 0; ib < dimB; ib++){
 		for (int tr = 0; tr < nthreads; tr++){
 			cblas_daxpy(k_int, 1, buffer_B + tr*(dimB * k) + ib*k, 1, Bnew + ib*k, 1);
