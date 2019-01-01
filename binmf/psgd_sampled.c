@@ -81,6 +81,30 @@ inline int isin(size_t k, size_t *arr, size_t n)
 	return res != NULL;
 }
 
+inline void set_to_zero(double arr[], const size_t n, const int nthreads)
+{
+
+	#if defined(_OPENMP)
+
+	#if (_OPENMP < 20080101) /* OpenMP < 3.0 */
+	long i;
+	#endif
+	size_t chunk_size = n / nthreads;
+	size_t remainder = n % nthreads;
+
+	#pragma omp parallel for schedule(static, 1) firstprivate(arr, chunk_size, nthreads)
+	for (size_t_for i = 0; i < nthreads; i++){
+		memset(arr + i * chunk_size, 0, sizeof(double) * chunk_size);
+	}
+	if (remainder > 0){
+		memset(arr + nthreads * chunk_size, 0, sizeof(double) * remainder);
+	}
+
+	#else
+	memset(arr, 0, sizeof(double) * n);
+	#endif
+}
+
 /* Function that applies subgradient updates */
 inline void add_subgradient(double step_sz, double *buffer_B, double *Anew, double *A, double *B, size_t ia, size_t ib,
 	size_t st_buffer_B, size_t k, int k_int, size_t *restrict Acnt, size_t *restrict buffer_B_cnt, size_t st_buffer_B_cnt, double class)
@@ -122,35 +146,13 @@ inline void set_arrays_to_zero(double *restrict Anew, double *restrict Bnew,
 	size_t *restrict Acnt, size_t *restrict Bcnt, double *restrict buffer_B, size_t *restrict buffer_B_cnt,
 	size_t dimA, size_t dimB, size_t k, size_t dim_bufferB, size_t dim_bufferB_cnt, int nthreads)
 {
-	#ifdef _OPENMP
-		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
-			size_t n;
-		#endif
 
-		/* Some arrays can get very large, and are faster to set in parallel */
-		#pragma omp parallel for schedule(static, dimA*k/nthreads) num_threads(nthreads) shared(Anew) firstprivate(dimA, k)
-		for (size_t_for n = 0; n < (dimA*k); n++){Anew[n] = 0;}
-		#pragma omp parallel for schedule(static, dimB*k/nthreads) num_threads(nthreads) shared(Bnew) firstprivate(dimB, k)
-		for (size_t_for n = 0; n < (dimB*k); n++){Bnew[n] = 0;}
-		#pragma omp parallel for schedule(static, dimA/nthreads) num_threads(nthreads) shared(Acnt) firstprivate(dimA)
-		for (size_t_for n = 0; n < (dimA); n++){Acnt[n] = 0;}
-		#pragma omp parallel for schedule(static, dimB/nthreads) num_threads(nthreads) shared(Bcnt) firstprivate(dimB)
-		for (size_t_for n = 0; n < (dimB); n++){Bcnt[n] = 0;}
-		#pragma omp parallel for schedule(static, dim_bufferB/nthreads) num_threads(nthreads) shared(buffer_B) firstprivate(dim_bufferB)
-		for (size_t_for n = 0; n < dim_bufferB; n++){buffer_B[n] = 0;}
-		#pragma omp parallel for schedule(static, dim_bufferB_cnt/nthreads) num_threads(nthreads) shared(buffer_B_cnt) firstprivate(dim_bufferB_cnt)
-		for (size_t_for n = 0; n < dim_bufferB_cnt; n++){buffer_B_cnt[n] = 0;}
-
-	#else
-		/* If no parallelization is available, faster to use memset */
-		memset(Anew, 0, dimA * k * sizeof(Anew[0]));
-		memset(Bnew, 0, dimB * k * sizeof(Bnew[0]));
-		memset(Acnt, 0, dimA * sizeof(Acnt[0]));
-		memset(Bcnt, 0, dimB * sizeof(Bcnt[0]));
-		memset(buffer_B, 0, dim_bufferB * sizeof(buffer_B[0]));
-		memset(buffer_B_cnt, 0, dim_bufferB_cnt * sizeof(buffer_B_cnt[0]));
-	#endif
-
+	set_to_zero(Anew, dimA * k, nthreads);
+	set_to_zero(Bnew, dimB * k, nthreads);
+	set_to_zero(Acnt, dimA, nthreads);
+	set_to_zero(Bcnt, dimB, nthreads);
+	set_to_zero(buffer_B, dim_bufferB, nthreads);
+	set_to_zero(buffer_B_cnt, dim_bufferB_cnt, nthreads);
 }
 
 inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double *Bnew, size_t *Bcnt, size_t dimB, size_t k, int nthreads)
