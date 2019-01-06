@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <string.h> /* memset */
 #include "findblas.h" /* https://github.com/david-cortes/findblas */
 #ifdef _OPENMP
 	#include <omp.h>
@@ -56,7 +57,6 @@
 	#endif
 #else
 	#define size_t_for size_t
-	#include <string.h> /* memset */
 #endif
 
 /* Helper functions */
