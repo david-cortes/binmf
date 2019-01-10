@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <limits.h>
 #include <string.h> /* memset */
 #include "findblas.h" /* https://github.com/david-cortes/findblas */
@@ -242,6 +243,13 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		buffer_B_cnt = Bcnt;
 	}
 
+	if (Anew == NULL || Bnew == NULL || Acnt == NULL || Bcnt == NULL ||
+		buffer_B == NULL || buffer_B_cnt == NULL
+		#if defined(_OPENMP) && defined(_MSC_VER)
+		|| seeds == NULL
+		#endif
+		) {fprintf(stderr, "Error: Could not allocate memory for procedure.\n"); goto cleanup;}
+
 	size_t dim_bufferB = dimB * k * nthreads;
 	size_t dim_bufferB_cnt = dimB * nthreads;
 	size_t st_buffer_B;
@@ -331,19 +339,20 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 	}
 
-	if (nthreads > 1){
-		free(buffer_B);
-		free(buffer_B_cnt);
-	}
-	free(Anew);
-	free(Bnew);
-	free(Acnt);
-	free(Bcnt);
+	cleanup:
+		if (nthreads > 1){
+			free(buffer_B);
+			free(buffer_B_cnt);
+		}
+		free(Anew);
+		free(Bnew);
+		free(Acnt);
+		free(Bcnt);
 
-	#ifdef _OPENMP
-		#ifdef _MSC_VER
-			free(seeds);
+		#ifdef _OPENMP
+			#ifdef _MSC_VER
+				free(seeds);
+			#endif
 		#endif
-	#endif
 
 }
