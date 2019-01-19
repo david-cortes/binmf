@@ -63,9 +63,8 @@
 /* Helper functions */
 inline int randint(int nmax, unsigned int *seed)
 {
-	int n = rand_r(seed);
 	int lim = INT_MAX - nmax + 1;
-	while (n > lim){n = rand_r(seed);}
+	do { n = rand_r(seed); } while (n > lim);
 	return n % nmax;
 }
 
@@ -245,7 +244,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 	if (Anew == NULL || Bnew == NULL || Acnt == NULL || Bcnt == NULL ||
 		buffer_B == NULL || buffer_B_cnt == NULL
-		#if defined(_OPENMP) && defined(_MSC_VER)
+		#if defined(_OPENMP)
 		|| seeds == NULL
 		#endif
 		) {fprintf(stderr, "Error: Could not allocate memory for procedure.\n"); goto cleanup;}
@@ -303,10 +302,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 				for (size_t i = 0; i < nthis; i++){
 
 					/* Pick a random number from B that is not in this row of A */
-					ib = (size_t) randint(dimB, tr_seed);
-					while (isin(ib, X_ind + st_this, nthis)){
-						ib = (size_t) randint(dimB, tr_seed);
-					}
+					do { ib = (size_t) randint(dimB, tr_seed); } while ( isin(ib, X_ind + st_this, nthis) );
 					add_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, -1);
 				}
 			} else {
