@@ -1,20 +1,66 @@
- /* Sparse Binary Matrix Factorization
+ /*
+	Sparse Binary Matrix Factorization
 
- Fit through projected sub-gradient descent, sampling missing entries at random in each iteration.
- Writen for C99 standard.
+	Fit through projected sub-gradient descent, sampling missing entries at random in each iteration.
+	Writen for C99 standard.
 
- Copyright David Cortes 2018 */
+	BSD 2-Clause License
+
+	Copyright (c) 2019, David Cortes
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+
+	* Redistributions of source code must retain the above copyright notice, this
+	  list of conditions and the following disclaimer.
+
+	* Redistributions in binary form must reproduce the above copyright notice,
+	  this list of conditions and the following disclaimer in the documentation
+	  and/or other materials provided with the distribution.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
 
 #include <math.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <limits.h>
 #include <string.h> /* memset */
-#include "findblas.h" /* https://github.com/david-cortes/findblas */
+#include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+#ifndef _FOR_R
+	#include "findblas.h" /* https://github.com/david-cortes/findblas */
+#else
+	#include <R_ext/BLAS.h>
+	double cblas_ddot(int n, double *x, int incx, double *y, int incy) { return ddot_(&n, x, &incx, y, &incy); }
+	void cblas_daxpy(int n, double a, double *x, int incx, double *y, int incy) { daxpy_(&n, &a, x, &incx, y, &incy); }
+	void cblas_dscal(int n, double alpha, double *x, int incx) { dscal_(&n, &alpha, x, &incx); }
+	double cblas_dnrm2(int n, double *x, int incx) { return dnrm2_(&n, x, &incx); }
+#endif
+#ifndef _FOR_R
+	#include <stdio.h>
+#else
+	#include <R_ext/Print.h>
+	#define fprintf(f, message) REprintf(message)
+#endif
+	#ifdef __cplusplus
+}
+#endif
 #ifdef _OPENMP
 	#include <omp.h>
 #endif
-
 
 /* Aliasing for compiler optimizations */
 #ifndef restrict
@@ -45,11 +91,6 @@
    As the code is wrapped in Cython and Cython does not support typdefs conditional on compiler,
    this will map size_t to long on Windows regardless of compiler.
    Can be safely removed if not compiling with MSVC. */
-#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
-	#define size_t long
-#else
-	#include <stddef.h>
-#endif
 #ifdef _OPENMP
 	#if _OPENMP < 20080101 /* OpenMP < 3.0 */
 		#define size_t_for size_t
@@ -64,6 +105,7 @@
 inline int randint(int nmax, unsigned int *seed)
 {
 	int lim = INT_MAX - nmax + 1;
+	int n;
 	do { n = rand_r(seed); } while (n > lim);
 	return n % nmax;
 }
@@ -81,7 +123,7 @@ inline int isin(size_t k, size_t *arr, size_t n)
 	return res != NULL;
 }
 
-inline void set_to_zero(double arr[], const size_t n, const int nthreads)
+inline void set_to_zero_dbl(double arr[], const size_t n, const int nthreads)
 {
 
 	#if defined(_OPENMP)
@@ -102,6 +144,30 @@ inline void set_to_zero(double arr[], const size_t n, const int nthreads)
 
 	#else
 	memset(arr, 0, sizeof(double) * n);
+	#endif
+}
+
+inline void set_to_zero_szt(size_t arr[], const size_t n, const int nthreads)
+{
+
+	#if defined(_OPENMP)
+
+	#if (_OPENMP < 20080101) /* OpenMP < 3.0 */
+	long i;
+	#endif
+	size_t chunk_size = n / nthreads;
+	size_t remainder = n % nthreads;
+
+	#pragma omp parallel for schedule(static, 1) firstprivate(arr, chunk_size, nthreads)
+	for (size_t_for i = 0; i < nthreads; i++){
+		memset(arr + i * chunk_size, 0, sizeof(size_t) * chunk_size);
+	}
+	if (remainder > 0){
+		memset(arr + nthreads * chunk_size, 0, sizeof(size_t) * remainder);
+	}
+
+	#else
+	memset(arr, 0, sizeof(size_t) * n);
 	#endif
 }
 
@@ -147,12 +213,12 @@ inline void set_arrays_to_zero(double *restrict Anew, double *restrict Bnew,
 	size_t dimA, size_t dimB, size_t k, size_t dim_bufferB, size_t dim_bufferB_cnt, int nthreads)
 {
 
-	set_to_zero(Anew, dimA * k, nthreads);
-	set_to_zero(Bnew, dimB * k, nthreads);
-	set_to_zero(Acnt, dimA, nthreads);
-	set_to_zero(Bcnt, dimB, nthreads);
-	set_to_zero(buffer_B, dim_bufferB, nthreads);
-	set_to_zero(buffer_B_cnt, dim_bufferB_cnt, nthreads);
+	set_to_zero_dbl(Anew, dimA * k, nthreads);
+	set_to_zero_dbl(Bnew, dimB * k, nthreads);
+	set_to_zero_szt(Acnt, dimA, nthreads);
+	set_to_zero_szt(Bcnt, dimB, nthreads);
+	set_to_zero_dbl(buffer_B, dim_bufferB, nthreads);
+	set_to_zero_szt(buffer_B_cnt, dim_bufferB_cnt, nthreads);
 }
 
 inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double *Bnew, size_t *Bcnt, size_t dimB, size_t k, int nthreads)

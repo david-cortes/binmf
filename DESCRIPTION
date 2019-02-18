@@ -1,0 +1,13 @@
+Package: binmf
+Type: Package
+Title: Low-Rank Factorization of Sparse Binary Matrices
+Version: 0.1
+Date: 2019-02-15
+Author: David Cortes
+Maintainer: David Cortes <david.cortes.rivera@gmail.com>
+Description: Creates a low-rank factorization of a sparse binary matrix with hinge loss, using an optimization routine
+	similar to the Pegasos algorithm.
+License: BSD_2_clause + file LICENSE
+Imports: Rcpp (>= 0.12.19), Matrix
+LinkingTo: Rcpp
+RoxygenNote: 6.1.1

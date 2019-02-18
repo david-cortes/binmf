@@ -1,0 +1,8 @@
+importFrom(Rcpp, evalCpp)
+importFrom("utils", "head")
+importFrom("stats", "runif")
+useDynLib(binmf, .registration=TRUE)
+export(binmf)
+S3method(predict, binmf)
+S3method(print, binmf)
+S3method(summary, binmf)

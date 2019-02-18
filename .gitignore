@@ -21,3 +21,4 @@ build/
 test.py
 
 MANIFEST
+.Rproj.user

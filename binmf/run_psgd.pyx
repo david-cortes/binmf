@@ -11,7 +11,7 @@ ELSE:
 	obj_ind_type = ctypes.c_size_t
 	ctypedef size_t ind_type
 
-cdef extern from "psgd_sampled.c":
+cdef extern from "../src/psgd_sampled.c":
 	void psgd(double *A, double *B, ind_type dimA, ind_type dimB, ind_type k, ind_type nnz,
 			ind_type *Xr_indptr, ind_type *Xr_ind, double *Xr,
 			double reg_param, ind_type niter, int projected, int nthreads)
