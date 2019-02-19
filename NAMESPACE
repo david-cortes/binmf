@@ -1,6 +1,7 @@
 importFrom(Rcpp, evalCpp)
 importFrom("utils", "head")
 importFrom("stats", "runif")
+importClassesFrom("Matrix", "dgCMatrix", "dgTMatrix")
 useDynLib(binmf, .registration=TRUE)
 export(binmf)
 S3method(predict, binmf)

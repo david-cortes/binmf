@@ -6,6 +6,15 @@ extern "C" {
 		double reg_param, size_t niter, int projected, int nthreads);
 }
 #include <Rcpp.h>
+#ifdef _OPENMP
+	#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+		#define size_t_for size_t
+	#else
+		#define size_t_for
+	#endif
+#else
+	#define size_t_for size_t
+#endif
 
 // [[Rcpp::export]]
 void r_wrapper_binmf(Rcpp::NumericVector A, Rcpp::NumericVector B, size_t dimA, size_t dimB, size_t k,
@@ -15,17 +24,29 @@ void r_wrapper_binmf(Rcpp::NumericVector A, Rcpp::NumericVector B, size_t dimA, 
 	/* Convert CSR matrix indices to size_t */
 	std::vector<size_t> X_ind;
 	std::vector<size_t> X_indptr;
-	X_ind.reserve(dimA + 1);
-	X_indptr.reserve(nnz);
+	X_indptr.reserve(dimA + 1);
+	X_ind.reserve(nnz);
+	// size_t *X_ind = (size_t*) malloc(sizeof(size_t) * (dimA + 1));
+	// size_t *X_indptr = (size_t*) malloc(sizeof(size_t) * nnz);
+
+	#ifdef _OPENMP
+		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+			long i;
+		#endif
+	#endif
+
 	#pragma omp parallel for schedule(static) num_threads(nthreads)
-	for (size_t i = 0; i < dimA + 1; i++) { X_ind[i] = Xind[i]; }
+	for (size_t_for i = 0; i < nnz; i++) { X_ind[i] = Xind[i]; }
 	#pragma omp parallel for schedule(static) num_threads(nthreads)
-	for (size_t i = 0; i < nnz; i++) { X_indptr[i] = Xindptr[i]; }
+	for (size_t_for i = 0; i < dimA + 1; i++) { X_indptr[i] = Xindptr[i]; }
 
 	/* Run procedure */
 	psgd(A.begin(), B.begin(), dimA, dimB, k, nnz,
 		(size_t*) &X_indptr[0], (size_t*) &X_ind[0], Xr.begin(),
 		reg_param, niter, projected, nthreads);
+
+	// free(X_ind);
+	// free(X_indptr);
 
 	/* Note: C++ refuses to acknowledge that the vectors of type unsigned long are equivalent to size_t,
 	   so don't use method .begin with the indices arrays */

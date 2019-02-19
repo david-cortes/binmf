@@ -125,17 +125,14 @@ inline int isin(size_t k, size_t *arr, size_t n)
 
 inline void set_to_zero_dbl(double arr[], const size_t n, const int nthreads)
 {
-
 	#if defined(_OPENMP)
 
-	#if (_OPENMP < 20080101) /* OpenMP < 3.0 */
-	long i;
-	#endif
+	int i;
 	size_t chunk_size = n / nthreads;
 	size_t remainder = n % nthreads;
 
 	#pragma omp parallel for schedule(static, 1) firstprivate(arr, chunk_size, nthreads)
-	for (size_t_for i = 0; i < nthreads; i++){
+	for (i = 0; i < nthreads; i++){
 		memset(arr + i * chunk_size, 0, sizeof(double) * chunk_size);
 	}
 	if (remainder > 0){
@@ -152,14 +149,12 @@ inline void set_to_zero_szt(size_t arr[], const size_t n, const int nthreads)
 
 	#if defined(_OPENMP)
 
-	#if (_OPENMP < 20080101) /* OpenMP < 3.0 */
-	long i;
-	#endif
+	int i;
 	size_t chunk_size = n / nthreads;
 	size_t remainder = n % nthreads;
 
 	#pragma omp parallel for schedule(static, 1) firstprivate(arr, chunk_size, nthreads)
-	for (size_t_for i = 0; i < nthreads; i++){
+	for (i = 0; i < nthreads; i++){
 		memset(arr + i * chunk_size, 0, sizeof(size_t) * chunk_size);
 	}
 	if (remainder > 0){
@@ -191,7 +186,7 @@ inline void update_weights(double *A, double *Anew, size_t *Acnt, size_t dimA, s
 	double cnst, scaling_proj;
 	#ifdef _OPENMP
 		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
-			size_t ia;
+			long ia;
 		#endif
 	#endif
 	#pragma omp parallel for schedule(dynamic) num_threads(nthreads) shared(A) firstprivate(Anew, projected, scaling_mispred, scaling_proj0, Acnt, dimA, k, k_int) private(cnst, scaling_proj)
@@ -228,7 +223,7 @@ inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double 
 
 	#ifdef _OPENMP
 		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
-			size_t ib;
+			long ib;
 		#endif
 	#endif
 
@@ -262,9 +257,8 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 	size_t ib;
 	int k_int = (int) k;
-	double scaling_iter, scaling_mispred, scaling_proj;
+	double scaling_iter, scaling_mispred;
 	double scaling_proj0 = 1 / sqrt(reg_param);
-	double cnst;
 
 	size_t nthis;
 	size_t st_this;
@@ -337,7 +331,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 		/* Calculating sub-gradients - iteration is through the rows of A */
 		#ifdef _OPENMP
 			#if _OPENMP < 20080101 /* OpenMP < 3.0 */
-				size_t ia;
+				long ia;
 			#endif
 		#endif
 		#pragma omp parallel for schedule(dynamic) num_threads(nthreads) firstprivate(X_indptr, X_ind, Xr, A, B, k, k_int, seeds) private(ib, nthis, st_this, tid, st_buffer_B, st_buffer_B_cnt, tr_seed, i) shared(Anew, Acnt, buffer_B, buffer_B_cnt)

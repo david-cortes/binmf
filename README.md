@@ -2,12 +2,13 @@
 
 This package performs low-rank factorization of sparse binary matrices. Model is based on minimization of hinge loss, and is fit through projected sub-gradient descent updates similar to the _pegasos_ algorithm for SVM. At each iteration, it samples entries from the negative class (having a value of zero) at random with replacement, until having an equal number of missing and non-missing entries for each row in the original matrix.
 
-Package is written in C with a Python interface. Requires a C compiler and some BLAS library such as MKL or OpenBLAS (will try to use the same one that NumPy installation is using).
+Package is written in C with Python and R interfaces. Requires a C compiler and some BLAS library such as MKL or OpenBLAS (in Python, will try to use the same one that NumPy installation is using).
 
 Computations are parallelized and speed (depending on sparsity) is in the same scale as `implicit-ALS` with the CG method as implemented in the [implicit](https://github.com/benfred/implicit) package.
 
 # Installation
 
+* Python
 Clone or download the repository and then install with setup.py, e.g.:
 
 ```
@@ -17,7 +18,17 @@ python setup.py install
 ```
 (It requires package `findblas`, can be installed with `pip install findblas`.)
 
+* R
+```r
+devtools::install_github("david-cortes/binmf")
+```
+
 # Usage
+
+* R
+See documentation (`help(binmf::binmf`)
+
+* Python
 
 Package does not have a fully-fledged API, only a function that modifies already-initialized parameter matrices in-place.
 
