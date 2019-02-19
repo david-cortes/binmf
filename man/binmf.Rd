@@ -9,9 +9,10 @@ binmf(X, k = 50, reg_param = 0.1, niter = 100, nthreads = -1,
 }
 \arguments{
 \item{X}{The matrix to factorize. Can be: a) a `data.frame` with 3 columns, containing in this order:
-row index, column index, weight; b) a full matrix (of class `matrix` or `Matrix::dgTMatrix`), where zero entries
+row index, column index, weight; b) A sparse matrix in CSR format from the `SparseM` package;
+c) a full matrix (of class `matrix` or `Matrix::dgTMatrix`), where zero entries
 are to be represented as zero and non-missing entries as a positive number indicating their weight;
-c) a sparse matrix from package `Matrix` in either triplets or compresses formats (will be cast to CSR so triplets
+d) a sparse matrix from package `Matrix` in either triplets or CSC formats (will be cast to CSR so triplets
 is more efficient), with the values being the weights. For uniform weights pass all ones as values in the sparse matrix.}
 
 \item{k}{Dimensionality of the factorization (a.k.a. number of latent factors).}
@@ -38,10 +39,11 @@ X <- data.frame(
     row_ix = as.integer(runif(nnz, min = 1, max = nrow)),
     col_ix = as.integer(runif(nnz, min = 1, max = ncol)),
     weight = 1)
+X <- X[!duplicated(X[, c("row_ix", "col_ix")]), ]
 model <- binmf(X)
 predict(model, 1, 10) ## predict entry (1, 10)
 predict(model, c(1, 1, 1), c(4, 5, 6)) ## predict entries [1,4], [1,5], [1,6]
-predict(model, 1) ## predict the whole row 1
+head(predict(model, 1)) ## predict the whole row 1
 }
 \references{
 Shalev-Shwartz, Shai, et al. "Pegasos: Primal estimated sub-gradient solver for svm." Mathematical programming 127.1 (2011): 3-30.

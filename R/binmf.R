@@ -4,9 +4,10 @@
 #' for SVM. It subsamples missing entries at random during each iteration by taking as many
 #' negative samples (zero-valued) as there are non-missing ones for each row.
 #' @param X The matrix to factorize. Can be: a) a `data.frame` with 3 columns, containing in this order:
-#' row index, column index, weight; b) a full matrix (of class `matrix` or `Matrix::dgTMatrix`), where zero entries
+#' row index, column index, weight; b) A sparse matrix in CSR format from the `SparseM` package;
+#' c) a full matrix (of class `matrix` or `Matrix::dgTMatrix`), where zero entries
 #' are to be represented as zero and non-missing entries as a positive number indicating their weight;
-#' c) a sparse matrix from package `Matrix` in either triplets or compresses formats (will be cast to CSR so triplets
+#' d) a sparse matrix from package `Matrix` in either triplets or CSC formats (will be cast to CSR so triplets
 #' is more efficient), with the values being the weights. For uniform weights pass all ones as values in the sparse matrix.
 #' @param k Dimensionality of the factorization (a.k.a. number of latent factors).
 #' @param reg_param Strength of the l2 regularization.
@@ -22,6 +23,7 @@
 #'     row_ix = as.integer(runif(nnz, min = 1, max = nrow)),
 #'     col_ix = as.integer(runif(nnz, min = 1, max = ncol)),
 #'     weight = 1)
+#' X <- X[!duplicated(X[, c("row_ix", "col_ix")]), ]
 #' model <- binmf(X)
 #' predict(model, 1, 10) ## predict entry (1, 10)
 #' predict(model, c(1, 1, 1), c(4, 5, 6)) ## predict entries [1,4], [1,5], [1,6]
@@ -52,8 +54,8 @@ binmf <- function(X, k = 50, reg_param = 1e-1, niter = 100, nthreads = -1, proje
 			X[[2]] <- factor(X[[2]])
 			levels_A <- levels(X[[1]])
 			levels_B <- levels(X[[2]])
-			X[[1]] <- as.integer(X[[1]]) - 1
-			X[[2]] <- as.integer(X[[2]]) - 1
+			X[[1]] <- as.integer(X[[1]])
+			X[[2]] <- as.integer(X[[2]])
 		}
 		
 		ix_row <- as.integer(X[[1]])
@@ -63,7 +65,6 @@ binmf <- function(X, k = 50, reg_param = 1e-1, niter = 100, nthreads = -1, proje
 		if (any(is.na(ix_row)) || any(is.na(ix_col)) || any(is.na(xflat))) {
 			stop("Input contains missing values.")
 		}
-		
 		Xcsr <- Matrix::sparseMatrix(i = ix_col, j = ix_row, x = xflat, giveCsparse = TRUE)
 	} else if ("dgeMatrix" %in% class(X)) {
 		if (any(is.na(X))) { stop("Input contains missing values.") }
@@ -75,6 +76,8 @@ binmf <- function(X, k = 50, reg_param = 1e-1, niter = 100, nthreads = -1, proje
 	} else if ("matrix" %in% class(X)) {
 		if (any(is.na(X))) { stop("Input contains missing values.") }
 		Xcsr <- as(t(X), "sparseMatrix")
+	} else if ("matrix.csr" %in% class(X)) {
+		Xcsr <- X
 	} else {
 		stop("'X' must be a 'data.frame' with 3 columns, or a matrix (either full or sparse in triplets or compressed).")
 	}
@@ -82,7 +85,11 @@ binmf <- function(X, k = 50, reg_param = 1e-1, niter = 100, nthreads = -1, proje
 	### Get dimensions
 	dimA <- NCOL(Xcsr)
 	dimB <- NROW(Xcsr)
-	nnz <- length(Xcsr@x)
+	if ("matrix.csr" %in% class(Xcsr)) {
+		nnz <- length(Xcsr@ra)
+	} else {
+		nnz <- length(Xcsr@x)
+	}
 	if (nnz < 1) { stop("Input does not contain non-zero values.") }
 	
 	### Initialize factor matrices
@@ -90,9 +97,15 @@ binmf <- function(X, k = 50, reg_param = 1e-1, niter = 100, nthreads = -1, proje
 	B = rnorm(dimB * k)
 	
 	### Run optimizer
-	r_wrapper_binmf(A, B, dimA, dimB, k,
-					Xcsr@x, Xcsr@i, Xcsr@p, nnz,
-					reg_param, niter, projected, nthreads)
+	if ("matrix.csr" %in% class(Xcsr)) {
+		r_wrapper_binmf(A, B, dimA, dimB, k,
+						Xcsr@ra, Xcsr@ja - 1, Xcsr@ia - 1, nnz,
+						reg_param, niter, projected, nthreads)
+	} else {
+		r_wrapper_binmf(A, B, dimA, dimB, k,
+						Xcsr@x, Xcsr@i, Xcsr@p, nnz,
+						reg_param, niter, projected, nthreads)
+	}
 	
 	### Return all info
 	out <- list(
