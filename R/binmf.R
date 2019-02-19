@@ -156,7 +156,7 @@ predict.binmf <- function(object, a, b = NULL, ...) {
 		pred <- object$A[, a] %*% object$B
 	} else {
 		pred = vector(mode = "numeric", length = length(a))
-		predict_multiple(object$A, object$B, object$k, length(a), a, b, pred, object$nthreads)
+		predict_multiple(object$A, object$B, object$k, length(a), a - 1, b - 1, pred, object$nthreads)
 	}
 	pred <- as.vector(pred)
 	
@@ -189,7 +189,7 @@ print.binmf <- function(x, ...) {
 
 #' @title Get information about binmf object
 #' @description Print basic properties of a "binmf" object (same as `print.binmf` function).
-#' @param x An object of class "binmf" as returned by function "binmf".
+#' @param object An object of class "binmf" as returned by function "binmf".
 #' @param ... Extra arguments (not used).
 #' @seealso \link{print.binmf}
 #' @export
