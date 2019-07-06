@@ -92,7 +92,7 @@ extern "C" {
    this will map size_t to long on Windows regardless of compiler.
    Can be safely removed if not compiling with MSVC. */
 #ifdef _OPENMP
-	#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+	#if _OPENMP < 200801 /* OpenMP < 3.0 */
 		#define size_t_for size_t
 	#else
 		#define size_t_for
@@ -185,7 +185,7 @@ inline void update_weights(double *A, double *Anew, size_t *Acnt, size_t dimA, s
 	int k_int = (int) k;
 	double cnst, scaling_proj;
 	#ifdef _OPENMP
-		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+		#if _OPENMP < 200801 /* OpenMP < 3.0 */
 			long ia;
 		#endif
 	#endif
@@ -222,7 +222,7 @@ inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double 
 	int k_int = (int) k;
 
 	#ifdef _OPENMP
-		#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+		#if _OPENMP < 200801 /* OpenMP < 3.0 */
 			long ib;
 		#endif
 	#endif
@@ -330,7 +330,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 		/* Calculating sub-gradients - iteration is through the rows of A */
 		#ifdef _OPENMP
-			#if _OPENMP < 20080101 /* OpenMP < 3.0 */
+			#if _OPENMP < 200801 /* OpenMP < 3.0 */
 				long ia;
 			#endif
 		#endif
