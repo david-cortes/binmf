@@ -101,15 +101,6 @@ extern "C" {
 	#define size_t_for size_t
 #endif
 
-/* Set BLAS as single-threaded if possible */
-#ifdef _OPENMP
-	#if defined(HAS_MKL) || defined(_MKL_H_)
-		int mkl_set_num_threads_local( int nt );
-	#elif defined(HAS_OPENBLAS) || defined(CBLAS_H)
-		void openblas_set_num_threads(int num_threads);
-	#endif
-#endif
-
 /* Helper functions */
 inline int randint(int nmax, unsigned int *seed)
 {
@@ -283,9 +274,9 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 	/* Avoid nested parallelism */
 	#ifdef _OPENMP
-		#if defined(HAS_MKL) || defined(_MKL_H_)
+		#if defined(_MKL_H_)
 			mkl_set_num_threads_local(1);
-		#elif defined(HAS_OPENBLAS) || defined(CBLAS_H)
+		#elif defined(CBLAS_H)
 			openblas_set_num_threads(1);
 		#endif
 	#endif
