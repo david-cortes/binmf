@@ -92,7 +92,7 @@ extern "C" {
    this will map size_t to long on Windows regardless of compiler.
    Can be safely removed if not compiling with MSVC. */
 #ifdef _OPENMP
-	#if _OPENMP < 200801 /* OpenMP < 3.0 */
+	#if (_OPENMP > 200801) && !defined(_WIN32) && !defined(_WIN64) /* OpenMP >= 3.0 */
 		#define size_t_for size_t
 	#else
 		#define size_t_for
@@ -101,9 +101,21 @@ extern "C" {
 	#define size_t_for size_t
 #endif
 
+/* Set BLAS as single-threaded if possible */
+#ifdef _OPENMP
+	#if defined(HAS_MKL) || defined(_MKL_H_)
+		int mkl_set_num_threads_local( int nt );
+	#elif defined(HAS_OPENBLAS) || defined(CBLAS_H)
+		void openblas_set_num_threads(int num_threads);
+	#endif
+#endif
+
 /* Helper functions */
 inline int randint(int nmax, unsigned int *seed)
 {
+	/* TODO: make it work with 'size_t' by concatenating the bytes of two random draws
+	   (should have a preprocessor check that defines if it's necessary, and how many
+	    bytes to take from each draw) */
 	int lim = INT_MAX - nmax + 1;
 	int n;
 	do { n = rand_r(seed); } while (n > lim);
@@ -185,7 +197,7 @@ inline void update_weights(double *A, double *Anew, size_t *Acnt, size_t dimA, s
 	int k_int = (int) k;
 	double cnst, scaling_proj;
 	#ifdef _OPENMP
-		#if _OPENMP < 200801 /* OpenMP < 3.0 */
+		#if (_OPENMP < 200801) || defined(_WIN32) || defined(_WIN64) /* OpenMP < 3.0 */
 			long ia;
 		#endif
 	#endif
@@ -222,7 +234,7 @@ inline void reconstruct_B_arrays(double *buffer_B, size_t *buffer_B_cnt, double 
 	int k_int = (int) k;
 
 	#ifdef _OPENMP
-		#if _OPENMP < 200801 /* OpenMP < 3.0 */
+		#if (_OPENMP < 200801) || defined(_WIN32) || defined(_WIN64) /* OpenMP < 3.0 */
 			long ib;
 		#endif
 	#endif
@@ -254,16 +266,29 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t *restrict X_indptr, size_t *restrict X_ind, double *restrict Xr,
 	double reg_param, size_t niter, int projected, int nthreads)
 {
+	if (dimA > INT_MAX || dimB > INT_MAX) {
+		fprintf(stderr, "Dimensionality of input matrix is too large. See 'TODO's in the source code and fix.\n");
+		return;
+	}
 
 	size_t ib;
 	int k_int = (int) k;
 	double scaling_iter, scaling_mispred;
-	double scaling_proj0 = 1 / sqrt(reg_param);
+	double scaling_proj0 = 1.0 / sqrt(reg_param);
 
 	size_t nthis;
 	size_t st_this;
 	size_t i;
 	int tid;
+
+	/* Avoid nested parallelism */
+	#ifdef _OPENMP
+		#if defined(HAS_MKL) || defined(_MKL_H_)
+			mkl_set_num_threads_local(1);
+		#elif defined(HAS_OPENBLAS) || defined(CBLAS_H)
+			openblas_set_num_threads(1);
+		#endif
+	#endif
 
 	#ifdef _OPENMP
 	/* Setting different random seeds for each thread
@@ -330,7 +355,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 
 		/* Calculating sub-gradients - iteration is through the rows of A */
 		#ifdef _OPENMP
-			#if _OPENMP < 200801 /* OpenMP < 3.0 */
+			#if (_OPENMP < 200801) || defined(_WIN32) || defined(_WIN64) /* OpenMP < 3.0 */
 				long ia;
 			#endif
 		#endif
