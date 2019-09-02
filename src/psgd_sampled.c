@@ -63,12 +63,16 @@ extern "C" {
 #endif
 
 /* Aliasing for compiler optimizations */
-#ifndef restrict
-	#ifdef __restrict
+#ifdef __cplusplus
+	#if defined(__GNUG__) || defined(__GNUC__) || defined(_MSC_VER) || defined(__clang__) || defined(__INTEL_COMPILER)
 		#define restrict __restrict
 	#else
-		#define restrict
+		#define restrict 
 	#endif
+#elif defined(_MSC_VER)
+	#define restrict __restrict
+#elif __STDC_VERSION__ < 199901L
+	#define restrict 
 #endif
 
 /* In-lining for compiler optimizations */
