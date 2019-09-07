@@ -76,10 +76,10 @@ extern "C" {
 #endif
 
 /* In-lining for compiler optimizations */
-#ifndef inline
-	#ifdef __inline
+#ifndef __cplusplus
+	#if defined(_MSC_VER)
 		#define inline __inline
-	#else
+	#elif !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
 		#define inline 
 	#endif
 #endif
