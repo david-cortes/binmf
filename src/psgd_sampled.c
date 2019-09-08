@@ -106,15 +106,52 @@ extern "C" {
 #endif
 
 /* Helper functions */
-inline int randint(int nmax, unsigned int *seed)
+inline size_t randint(size_t nmax, unsigned int *seed)
 {
-	/* TODO: make it work with 'size_t' by concatenating the bytes of two random draws
-	   (should have a preprocessor check that defines if it's necessary, and how many
-	    bytes to take from each draw) */
-	int lim = INT_MAX - nmax + 1;
-	int n;
-	do { n = rand_r(seed); } while (n > lim);
-	return n % nmax;
+	if (nmax <= INT_MAX)
+	{
+		int lim = INT_MAX - INT_MAX % nmax;
+		int n;
+		do { n = rand_r(seed); } while (n > lim);
+		return n % nmax;
+	}
+
+	else if (nmax <= UINT_MAX)
+	{
+		unsigned int lim = UINT_MAX - UINT_MAX % nmax;
+		unsigned int n;
+		do
+		{
+			n  = rand_r(seed);
+			n += rand_r(seed);
+		} while (n > lim);
+		return n % nmax;
+	}
+
+	else
+	{
+		size_t ndraws = sizeof(size_t) / sizeof(int);
+		size_t n_remainder = sizeof(size_t) % sizeof(int);
+
+		size_t lim = SIZE_MAX - SIZE_MAX % nmax;
+		size_t n;
+		char *ptr_drawn = (char*) &n;
+		unsigned int single_int;
+		do
+		{
+			for (size_t d = 0; d < ndraws; d++) {
+				single_int  = rand_r(seed);
+				single_int += rand_r(seed);
+				memcpy(ptr_drawn + d * sizeof(int), &single_int, sizeof(int));
+			}
+			if (n_remainder) {
+				single_int  = rand_r(seed);
+				single_int += rand_r(seed);
+				memcpy(ptr_drawn + ndraws * sizeof(int), &single_int, n_remainder);
+			}
+		} while (n > lim);
+		return n % nmax;
+	}
 }
 
 int comp_size_t(const void *a, const void *b)
@@ -261,11 +298,6 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 	size_t *restrict X_indptr, size_t *restrict X_ind, double *restrict Xr,
 	double reg_param, size_t niter, int projected, int nthreads)
 {
-	if (dimA > INT_MAX || dimB > INT_MAX) {
-		fprintf(stderr, "Dimensionality of input matrix is too large. See 'TODO's in the source code and fix.\n");
-		return;
-	}
-
 	size_t ib;
 	int k_int = (int) k;
 	double scaling_iter, scaling_mispred;
@@ -382,7 +414,7 @@ void psgd(double *restrict A, double *restrict B, size_t dimA, size_t dimB, size
 				for (size_t i = 0; i < nthis; i++){
 
 					/* Pick a random number from B that is not in this row of A */
-					do { ib = (size_t) randint(dimB, tr_seed); } while ( isin(ib, X_ind + st_this, nthis) );
+					do { ib = randint(dimB, tr_seed); } while ( isin(ib, X_ind + st_this, nthis) );
 					add_subgradient(-1, buffer_B, Anew, A, B, ia, ib, st_buffer_B, k, k_int, Acnt, buffer_B_cnt, st_buffer_B_cnt, -1);
 				}
 			} else {
