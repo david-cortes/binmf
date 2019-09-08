@@ -140,9 +140,8 @@ inline size_t randint(size_t nmax, unsigned int *seed)
 		do
 		{
 			for (size_t d = 0; d < ndraws; d++) {
-				single_int  = rand_r(seed);
-				single_int += rand_r(seed);
-				memcpy(ptr_drawn + d * sizeof(int), &single_int, sizeof(int));
+				*((int*)(ptr_drawn + d * sizeof(int)))  = rand_r(seed);
+				*((int*)(ptr_drawn + d * sizeof(int))) += rand_r(seed);
 			}
 			if (n_remainder) {
 				single_int  = rand_r(seed);
